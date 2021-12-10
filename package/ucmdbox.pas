@@ -1,4 +1,5 @@
 { Copyright (C) 2007 Julian Schutsch
+  Copyright (C) 2016 Alexander Kernozhitsky
 
   This source is free software; you can redistribute it and/or modify it under
   the terms of the GNU Lesser General Public License as published by the Free
@@ -63,6 +64,8 @@
    01.12.2014 : Set key:=0 for arrow keys to prevent some interesting
                 component jumping behaviour.
                 Calculate the page height using "inherited height" now.
+   25.06.2016 : Modified by Alexander Kernozhitsky (alex256). Added a
+                GetText method and Text property to get the text.
 
    Todo    : Input Masks
    Todo    : Docu
@@ -70,12 +73,12 @@
 }
 unit uCmdBox;
 
-{$mode objfpc}{$H+}
+{$mode objfpc}{$H+}{$coperators on}
 
 interface
 
 uses Classes, SysUtils, ExtCtrls, Controls, Graphics, Forms, LCLType, LCLIntf,
-     lmessages, lresources, ClipBrd, LCLProc;
+     lmessages, lresources, ClipBrd, LCLProc, LazUTF8;
 
 type
   TCaretType = (cartLine, cartSubBar, cartBigBar, cartUser);
@@ -223,8 +226,10 @@ type
     procedure SetWrapMode(AValue:TWrapMode);
 
   public
-
-    procedure SaveToFile(AFileName: string);
+    function GetText: String;
+    property Text: String read GetText;
+    procedure SaveToStream(AStream: TStream);
+    procedure SaveToFile(const AFileName: String);
     function HistoryHas(s: string): boolean;
     function HistoryIndexOf(s: string): integer;
     procedure ClearHistory;
@@ -380,23 +385,6 @@ procedure Register;
 
 implementation
 
-procedure TCmdBox.SaveToFile(AFileName: string);
-var
-  Txt: System.Text;
-  i:   integer;
-begin
-  AssignFile(Txt, AFileName);
-  Rewrite(Txt);
-  for i := 0 to LineCount - 1 do
-  begin
-    with FLines[i] do
-    begin
-      system.Writeln(Txt, GetString);
-    end;
-  end;
-  CloseFile(Txt);
-end;
-
 procedure TColorString.UpdateAll;
 var i:Integer;
 begin
@@ -524,6 +512,40 @@ begin
     FInputBuffer.UpdateSum;
     UpdateLineHeights;
     Invalidate;
+  end;
+end;
+
+function TCmdBox.GetText: String;
+var
+  LastLine: Integer;
+  I: Integer;
+begin
+  LastLine := LineCount - 1;
+  while LastLine >= 0 do
+  begin
+    if FLines[LastLine].GetString <> '' then Break;
+    Dec(LastLine);
+  end;
+  Result := '';
+  for I := 0 to LastLine do
+    Result += FLines[I].GetString + LineEnding;
+end;
+
+procedure TCmdBox.SaveToStream(AStream: TStream);
+var S: String;
+begin
+  S := Text;
+  AStream.WriteBuffer(Pointer(S)^, Length(S));
+end;
+
+procedure TCmdBox.SaveToFile(const AFileName: String);
+var FileStream: TFileStream;
+begin
+  FileStream := TFileStream.Create(AFileName, fmCreate);
+  try
+    SaveToStream(FileStream);
+  finally
+    FreeAndNil(FileStream);
   end;
 end;
 
